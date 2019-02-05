@@ -32,7 +32,10 @@ public class ImageConverter implements ConverterPlugin {
 
     @Override
     public boolean canConvertFile(String contentType, String filename, String subject) {
-        return filename.endsWith(".png") || filename.endsWith(".jpg");
+        return  filename.endsWith(".png")
+                || filename.endsWith(".jpg")
+                || contentType.equals("image/jpeg")
+                || contentType.equals("image/png");
     }
 
     @Override
