@@ -1,0 +1,33 @@
+image: docker:latest
+services:
+- docker:dind
+
+stages:
+  - build
+
+variables:
+  CONTAINER_RELEASE_IMAGE_SMALL: registry.gitlab.com/t-oster/mail2print:small-latest
+  CONTAINER_RELEASE_IMAGE_BIG: registry.gitlab.com/t-oster/mail2print:big-latest
+
+before_script:
+  - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN registry.gitlab.com
+
+cache:
+  paths:
+    - target/
+
+build-small:
+  stage: build
+  script:
+    - docker build --pull -f Dockerfile-small -t $CONTAINER_RELEASE_IMAGE_SMALL .
+    - docker push $CONTAINER_RELEASE_IMAGE_SMALL
+  only:
+    - master
+
+build-big:
+  stage: build
+  script:
+    - docker build --pull -t $CONTAINER_RELEASE_IMAGE_BIG .
+    - docker push $CONTAINER_RELEASE_IMAGE_BIG
+  only:
+    - master
