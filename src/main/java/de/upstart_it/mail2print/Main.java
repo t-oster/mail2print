@@ -37,6 +37,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.mail.util.MimeMessageParser;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.ExtensionFactory;
@@ -181,7 +182,7 @@ public class Main {
         byte[] data = null;
         if (filename.endsWith(".pdf") || contentType.contains("application/pdf")) {
             log.log(Level.FINE, "Printing {0} with type {1}", new Object[]{ds.getName(), ds.getContentType()});
-            data = ds.getInputStream().readAllBytes();
+            data = IOUtils.toByteArray(ds.getInputStream());
         } else {
             for (ConverterPlugin plugin : getConverter().toArray(ConverterPlugin[]::new)) {
                 if (plugin.canConvertFile(contentType, filename, subject)) {
@@ -214,7 +215,7 @@ public class Main {
                 while (target.exists()) {
                     target = new File(output, (++number)+e.getName());
                 }
-                FileUtils.writeByteArrayToFile(target, e.getInputStream().readAllBytes());
+                FileUtils.writeByteArrayToFile(target, IOUtils.toByteArray(e.getInputStream()));
                 e.getInputStream().reset();
                 processed = true;
             }
