@@ -5,11 +5,13 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 import javax.activation.DataSource;
 import javax.mail.Flags;
 import javax.mail.Flags.Flag;
@@ -127,6 +129,10 @@ public class Main {
         password = cmd.getOptionValue(oPassword.getLongOpt(), "Virtual_PDF_Printer");
         hostname = cmd.getOptionValue(oHost.getLongOpt(), "Virtual_PDF_Printer");
     }
+    
+    private Stream<ConverterPlugin> getConverter() {
+        return pluginManager.getExtensions(ConverterPlugin.class).stream().filter(Objects::nonNull);
+    }
 
     public Main(String[] args) throws NoSuchProviderException, MessagingException, IOException, ParseException {
         parseCommandLine(args);
@@ -151,9 +157,7 @@ public class Main {
         log.info("loading Plugins...");
         pluginManager.loadPlugins();
         pluginManager.startPlugins();
-        for (ConverterPlugin plugin : pluginManager.getExtensions(ConverterPlugin.class)) {
-            log.log(Level.INFO, "Plugin {0} loaded", plugin.getName());
-        }
+        getConverter().forEach((plugin) -> {log.log(Level.INFO, "Plugin {0} loaded", plugin.getName());});
     }
     
     private void shutdown() throws MessagingException {
@@ -174,7 +178,7 @@ public class Main {
         return parser.getAttachmentList();
     }
 
-    private boolean print(String subject, DataSource ds) throws IOException, PrintException {
+    private boolean print(String subject, final DataSource ds) throws IOException, PrintException {
         String contentType = ds.getContentType().toLowerCase();
         String filename = ds.getName().toLowerCase();
         byte[] data = null;
@@ -182,11 +186,16 @@ public class Main {
             log.log(Level.FINE, "Printing {0} with type {1}", new Object[]{ds.getName(), ds.getContentType()});
             data = ds.getInputStream().readAllBytes();
         } else {
-            for (ConverterPlugin plugin : pluginManager.getExtensions(ConverterPlugin.class)) {
+            for (ConverterPlugin plugin : getConverter().toArray(ConverterPlugin[]::new)) {
                 if (plugin.canConvertFile(contentType, filename, subject)) {
-                    log.log(Level.INFO, "Using {0} to convert {1}", new Object[]{plugin.getName(), filename});
-                    data = plugin.convertToPdf(ds.getInputStream(), contentType, filename, subject);
-                    break;
+                    try {
+                        log.log(Level.INFO, "Using {0} to convert {1}", new Object[]{plugin.getName(), filename});
+                        data = plugin.convertToPdf(ds.getInputStream(), contentType, filename, subject);
+                        break;
+                    }
+                    catch (Exception e) {
+                        log.severe(e.getLocalizedMessage());
+                    }
                 }
             }
             if (data == null) {

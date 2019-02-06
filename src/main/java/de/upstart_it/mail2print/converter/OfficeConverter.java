@@ -27,8 +27,8 @@ public class OfficeConverter implements ConverterPlugin {
         try {
             officeManager = LocalOfficeManager.install();
             officeManager.start();
-        } catch (OfficeException ex) {
-            Logger.getLogger(OfficeConverter.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (Exception ex) {
+            log.log(Level.SEVERE, null, ex);
             officeManager = null;
         }
     }
