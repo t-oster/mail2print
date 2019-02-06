@@ -12,6 +12,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.activation.DataSource;
 import javax.mail.Flags;
+import javax.mail.Flags.Flag;
 import javax.mail.Folder;
 import javax.mail.Message;
 import javax.mail.MessagingException;
@@ -58,6 +59,7 @@ public class Main {
     @Getter
     private boolean useOfficeConverter = false;
     private boolean idleMode = false;
+    private boolean deleteMails = false;
     private String user = "";
     private String password = "";
     private String hostname = "";
@@ -77,6 +79,9 @@ public class Main {
 
         Option oIdle = new Option("i", "idle-mode", false, "Use IMAP-IDLE to wait for new messages");
         options.addOption(oIdle);
+        
+        Option oDelete = new Option("d", "delete", false, "Delete mails after successful procesing");
+        options.addOption(oDelete);
         
         Option oUser = new Option("u", "username", true, "Username for the IMAP account");
         oUser.setRequired(true);
@@ -117,6 +122,7 @@ public class Main {
         }
         useOfficeConverter = cmd.hasOption(oConvert.getLongOpt());
         idleMode = cmd.hasOption(oIdle.getLongOpt());
+        deleteMails = cmd.hasOption(oDelete.getLongOpt());
         user = cmd.getOptionValue(oUser.getLongOpt());
         password = cmd.getOptionValue(oPassword.getLongOpt(), "Virtual_PDF_Printer");
         hostname = cmd.getOptionValue(oHost.getLongOpt(), "Virtual_PDF_Printer");
@@ -168,7 +174,7 @@ public class Main {
         return parser.getAttachmentList();
     }
 
-    private void print(String subject, DataSource ds) throws IOException, PrintException {
+    private boolean print(String subject, DataSource ds) throws IOException, PrintException {
         String contentType = ds.getContentType().toLowerCase();
         String filename = ds.getName().toLowerCase();
         byte[] data = null;
@@ -185,14 +191,16 @@ public class Main {
             }
             if (data == null) {
                 log.log(Level.INFO, "Skipping unsupported {0} with type {1}", new Object[]{ds.getName(), ds.getContentType()});
-                return;
+                return false;
             }
         }
         printHelper.printPDF(printer, data, null, null);
+        return true;
     }
 
     private void process(Message msg) throws Exception {
         log.log(Level.FINE, "processing {0}", msg.getSubject());
+        boolean processed = false;
         for (DataSource e : getAttachments((MimeMessage) msg)) {
             if (output != null) {
                 int number = 0;
@@ -202,10 +210,16 @@ public class Main {
                 }
                 FileUtils.writeByteArrayToFile(target, e.getInputStream().readAllBytes());
                 e.getInputStream().reset();
+                processed = true;
             }
             if (printer != null) {
-                print(msg.getSubject(), e);
+                if (print(msg.getSubject(), e)) {
+                    processed = true;
+                }
             }
+        }
+        if (processed && deleteMails) {
+            msg.setFlag(Flag.DELETED, true);
         }
     }
 
@@ -234,6 +248,9 @@ public class Main {
         Folder folder = store.getFolder("INBOX");
         folder.open(Folder.READ_WRITE);
         processUnreadMessages(folder);
+        if (deleteMails) {
+            folder.expunge();
+        }
         if (!idleMode) {
             folder.close();
             shutdown();
@@ -251,7 +268,14 @@ public class Main {
                     try {
                         process(msg);
                     } catch (Exception ex) {
-                        Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+                        log.log(Level.SEVERE, null, ex);
+                    }
+                }
+                if (deleteMails) {
+                    try {
+                        folder.expunge();
+                    } catch (MessagingException ex) {
+                        log.log(Level.SEVERE, null, ex);
                     }
                 }
                 try {
