@@ -58,8 +58,6 @@ public class Main {
     private final Session session;
     
     private PrintService printer = null;
-    @Getter
-    private boolean useOfficeConverter = false;
     private boolean idleMode = false;
     private boolean deleteMails = false;
     private String user = "";
@@ -122,7 +120,6 @@ public class Main {
                 throw new ParseException("Folder "+oOutput.getLongOpt()+" does not exist or is not writeable");
             }
         }
-        useOfficeConverter = cmd.hasOption(oConvert.getLongOpt());
         idleMode = cmd.hasOption(oIdle.getLongOpt());
         deleteMails = cmd.hasOption(oDelete.getLongOpt());
         user = cmd.getOptionValue(oUser.getLongOpt());

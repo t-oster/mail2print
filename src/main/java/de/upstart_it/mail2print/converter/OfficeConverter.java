@@ -5,7 +5,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import lombok.extern.java.Log;
 import org.jodconverter.JodConverter;
 import org.jodconverter.document.DefaultDocumentFormatRegistry;
@@ -29,6 +28,7 @@ public class OfficeConverter implements ConverterPlugin {
             officeManager.start();
         } catch (Exception ex) {
             log.log(Level.SEVERE, null, ex);
+            log.log(Level.INFO, "Office Converter disabled.");
             officeManager = null;
         }
     }
