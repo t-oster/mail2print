@@ -1,6 +1,6 @@
 package de.upstart_it.mail2print;
 
-import com.sun.mail.imap.IdleManager;
+import com.sun.mail.imap.IMAPFolder;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -10,7 +10,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
 import javax.activation.DataSource;
 import javax.mail.Flags;
@@ -21,13 +20,10 @@ import javax.mail.MessagingException;
 import javax.mail.NoSuchProviderException;
 import javax.mail.Session;
 import javax.mail.Store;
-import javax.mail.event.MessageCountAdapter;
-import javax.mail.event.MessageCountEvent;
 import javax.mail.internet.MimeMessage;
 import javax.mail.search.FlagTerm;
 import javax.print.PrintException;
 import javax.print.PrintService;
-import lombok.Getter;
 import lombok.extern.java.Log;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -51,13 +47,12 @@ import org.pf4j.SingletonExtensionFactory;
 @Log
 public class Main {
 
-    private IdleManager idleManager;
     private final Store store;
     private final ExecutorService es;
     private final PrintHelper printHelper = new PrintHelper();
     private final PluginManager pluginManager;
     private final Session session;
-    
+
     private PrintService printer = null;
     private boolean idleMode = false;
     private boolean deleteMails = false;
@@ -71,7 +66,7 @@ public class Main {
 
         Option oPrinter = new Option("p", "printer", true, "Printer to use. If not specified, files won't be printed");
         options.addOption(oPrinter);
-        
+
         Option oOutput = new Option("o", "output-folder", true, "Folder where to save attachments.");
         options.addOption(oOutput);
 
@@ -80,22 +75,21 @@ public class Main {
 
         Option oIdle = new Option("i", "idle-mode", false, "Use IMAP-IDLE to wait for new messages");
         options.addOption(oIdle);
-        
+
         Option oDelete = new Option("d", "delete", false, "Delete mails after successful procesing");
         options.addOption(oDelete);
-        
+
         Option oUser = new Option("u", "username", true, "Username for the IMAP account");
         oUser.setRequired(true);
         options.addOption(oUser);
-        
+
         Option oPassword = new Option("P", "password", true, "Password for the IMAP account");
         oPassword.setRequired(true);
         options.addOption(oPassword);
-        
+
         Option oHost = new Option("h", "host", true, "IMAP server");
         oHost.setRequired(true);
         options.addOption(oHost);
-        
 
         CommandLineParser parser = new GnuParser();
         HelpFormatter formatter = new HelpFormatter();
@@ -112,13 +106,13 @@ public class Main {
         if (cmd.hasOption(oPrinter.getLongOpt())) {
             printer = printHelper.getPrinter(cmd.getOptionValue(oPrinter.getLongOpt()));
             if (printer == null) {
-                throw new ParseException("Printer "+cmd.getOptionValue(oPrinter.getLongOpt())+" not found");
+                throw new ParseException("Printer " + cmd.getOptionValue(oPrinter.getLongOpt()) + " not found");
             }
         }
         if (cmd.hasOption(oOutput.getLongOpt())) {
             output = new File(cmd.getOptionValue(oOutput.getLongOpt()));
             if (!output.isDirectory() || !output.canWrite()) {
-                throw new ParseException("Folder "+oOutput.getLongOpt()+" does not exist or is not writeable");
+                throw new ParseException("Folder " + oOutput.getLongOpt() + " does not exist or is not writeable");
             }
         }
         idleMode = cmd.hasOption(oIdle.getLongOpt());
@@ -127,7 +121,7 @@ public class Main {
         password = cmd.getOptionValue(oPassword.getLongOpt(), "Virtual_PDF_Printer");
         hostname = cmd.getOptionValue(oHost.getLongOpt(), "Virtual_PDF_Printer");
     }
-    
+
     private Stream<ConverterPlugin> getConverter() {
         return pluginManager.getExtensions(ConverterPlugin.class).stream().filter(Objects::nonNull);
     }
@@ -137,15 +131,11 @@ public class Main {
 
         es = Executors.newCachedThreadPool();
         Properties props = System.getProperties();
-        props.setProperty("mail.imaps.usesocketchannels", "true");
-
         // Get a Session object
         session = Session.getInstance(props, null);
-        // session.setDebug(true);
-
         // Get a Store object
         store = session.getStore("imaps");
-        
+
         pluginManager = new DefaultPluginManager() {
             @Override
             protected ExtensionFactory createExtensionFactory() {
@@ -155,17 +145,14 @@ public class Main {
         log.info("loading Plugins...");
         pluginManager.loadPlugins();
         pluginManager.startPlugins();
-        getConverter().forEach((plugin) -> {log.log(Level.INFO, "Plugin {0} loaded", plugin.getName());});
+        getConverter().forEach((plugin) -> {
+            log.log(Level.INFO, "Plugin {0} loaded", plugin.getName());
+        });
     }
-    
+
     private void shutdown() throws MessagingException {
-        for (ConverterPlugin plugin : pluginManager.getExtensions(ConverterPlugin.class)) {
-            plugin.shutdown();
-        }
+        getConverter().forEach(ConverterPlugin::shutdown);
         pluginManager.stopPlugins();
-        if (idleMode && idleManager != null && idleManager.isRunning()) {
-            idleManager.stop();
-        }
         store.close();
         es.shutdownNow();
     }
@@ -190,8 +177,7 @@ public class Main {
                         log.log(Level.INFO, "Using {0} to convert {1}", new Object[]{plugin.getName(), filename});
                         data = plugin.convertToPdf(ds.getInputStream(), contentType, filename, subject);
                         break;
-                    }
-                    catch (Exception e) {
+                    } catch (Exception e) {
                         log.severe(e.getLocalizedMessage());
                     }
                 }
@@ -213,7 +199,7 @@ public class Main {
                 int number = 0;
                 File target = new File(output, e.getName());
                 while (target.exists()) {
-                    target = new File(output, (++number)+e.getName());
+                    target = new File(output, (++number) + e.getName());
                 }
                 FileUtils.writeByteArrayToFile(target, IOUtils.toByteArray(e.getInputStream()));
                 e.getInputStream().reset();
@@ -245,6 +231,13 @@ public class Main {
         for (Message msg : messages) {
             process(msg);
         }
+        if (deleteMails) {
+            try {
+                folder.expunge();
+            } catch (MessagingException ex) {
+                log.log(Level.SEVERE, null, ex);
+            }
+        }
     }
 
     private void run() throws MessagingException, Exception {
@@ -252,66 +245,52 @@ public class Main {
         log.log(Level.INFO, "connecting to {0}", hostname);
         store.connect(hostname, user, password);
 
-        Folder folder = store.getFolder("INBOX");
+        IMAPFolder folder = (IMAPFolder) store.getFolder("INBOX");
         folder.open(Folder.READ_WRITE);
-        processUnreadMessages(folder);
-        if (deleteMails) {
-            folder.expunge();
-        }
-        if (!idleMode) {
-            folder.close();
-            shutdown();
-            return;
-        }
-        log.info("Waiting for new messages...");
-        idleManager = new IdleManager(session, es);
-        folder.addMessageCountListener(new MessageCountAdapter() {
-            @Override
-            public void messagesAdded(MessageCountEvent ev) {
-                Folder folder = (Folder) ev.getSource();
-                Message[] msgs = ev.getMessages();
-                log.log(Level.INFO, "Folder: {0} got {1} new messages", new Object[]{folder, msgs.length});
-                for (Message msg : msgs) {
-                    try {
-                        process(msg);
-                    } catch (Exception ex) {
-                        log.log(Level.SEVERE, null, ex);
-                    }
-                }
-                if (deleteMails) {
-                    try {
-                        folder.expunge();
-                    } catch (MessagingException ex) {
-                        log.log(Level.SEVERE, null, ex);
-                    }
-                }
-                try {
-                    // process new messages
-                    log.info("Waiting for new messages...");
-                    idleManager.watch(folder); // keep watching for new messages
-                } catch (MessagingException mex) {
-                    // handle exception related to the Folder
-                }
-            }
-        });
-        new Thread() {
+        Thread keepAliveThread = new Thread() {
             @Override
             public void run() {
+                log.fine("keep alive started...");
                 while (!Thread.interrupted()) {
                     try {
                         Thread.sleep(300000);//5min
                         log.fine("Checking if connection is alive...");
                         folder.getNewMessageCount();
                     } catch (InterruptedException e) {
+                        log.fine("Stopping keep alive");
                         // Ignore, just aborting the thread...
                     } catch (MessagingException ex) {
-                        Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+                        log.log(Level.SEVERE, null, ex);
                     }
                 }
             }
-
-        }.start();
-        idleManager.watch(folder);
+        };
+        if (idleMode) {
+            keepAliveThread.start();
+        }
+        while (!Thread.interrupted()) {
+            if (!folder.isOpen()) {
+                log.info("Connection was lost, reestablish....");
+                folder.open(Folder.READ_WRITE);
+            }
+            processUnreadMessages(folder);
+            if (!idleMode) {
+                break;
+            }
+            log.info("Waiting for new messages (IDLE)...");
+            if (keepAliveThread.isAlive())
+            
+            folder.idle(true);
+            
+        }
+        if (idleMode && keepAliveThread.isAlive()) {
+            keepAliveThread.interrupt();
+            keepAliveThread.join();
+        }
+        if (folder.isOpen()) {
+            folder.close();
+        }
+        shutdown();
     }
 
     public static void main(String[] args) {
