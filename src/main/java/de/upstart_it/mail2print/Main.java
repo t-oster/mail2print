@@ -131,6 +131,7 @@ public class Main {
 
         es = Executors.newCachedThreadPool();
         Properties props = System.getProperties();
+        props.setProperty("mail.imaps.timeout", "10000");
         // Get a Session object
         session = Session.getInstance(props, null);
         // Get a Store object
@@ -261,6 +262,7 @@ public class Main {
                         // Ignore, just aborting the thread...
                     } catch (MessagingException ex) {
                         log.log(Level.SEVERE, null, ex);
+                        
                     }
                 }
             }
@@ -278,10 +280,12 @@ public class Main {
                 break;
             }
             log.info("Waiting for new messages (IDLE)...");
-            if (keepAliveThread.isAlive())
-            
-            folder.idle(true);
-            
+            try {
+                folder.idle(true);
+            }
+            catch (Exception e) {
+                log.info("Idle Exception "+e.getLocalizedMessage());
+            }
         }
         if (idleMode && keepAliveThread.isAlive()) {
             keepAliveThread.interrupt();
