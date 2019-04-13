@@ -56,6 +56,7 @@ public class Main {
     private PrintService printer = null;
     private boolean idleMode = false;
     private boolean deleteMails = false;
+    private boolean keepRunning = true;
     private String user = "";
     private String password = "";
     private String hostname = "";
@@ -155,6 +156,7 @@ public class Main {
         getConverter().forEach(ConverterPlugin::shutdown);
         pluginManager.stopPlugins();
         store.close();
+        keepRunning = false;
         es.shutdownNow();
     }
 
@@ -198,9 +200,13 @@ public class Main {
         for (DataSource e : getAttachments((MimeMessage) msg)) {
             if (output != null) {
                 int number = 0;
-                File target = new File(output, e.getName());
+                String name = e.getName();
+                if (name == null) {
+                    name = "unknown";
+                }
+                File target = new File(output, name);
                 while (target.exists()) {
-                    target = new File(output, (++number) + e.getName());
+                    target = new File(output, (++number) + name);
                 }
                 FileUtils.writeByteArrayToFile(target, IOUtils.toByteArray(e.getInputStream()));
                 e.getInputStream().reset();
@@ -252,9 +258,9 @@ public class Main {
             @Override
             public void run() {
                 log.fine("keep alive started...");
-                while (!Thread.interrupted()) {
+                while (keepRunning && !Thread.interrupted()) {
                     try {
-                        Thread.sleep(300000);//5min
+                        Thread.sleep(120000);//2min
                         log.fine("Checking if connection is alive...");
                         folder.getNewMessageCount();
                     } catch (InterruptedException e) {

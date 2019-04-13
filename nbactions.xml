@@ -10,7 +10,7 @@
                 <goal>org.codehaus.mojo:exec-maven-plugin:1.5.0:exec</goal>
             </goals>
             <properties>
-                <exec.args>-classpath %classpath ${packageClassName} --convert-office-files --host sslin.df.eu --username print@upstart-it.de --password printer321 --printer Virtual_PDF_Printer --output-folder /tmp -i</exec.args>
+                <exec.args>-classpath %classpath ${packageClassName} --convert-office-files --host sslin.df.eu --username print@upstart-it.de --password printer321 --output-folder /tmp</exec.args>
                 <exec.executable>java</exec.executable>
             </properties>
         </action>
@@ -24,7 +24,7 @@
                 <goal>org.codehaus.mojo:exec-maven-plugin:1.5.0:exec</goal>
             </goals>
             <properties>
-                <exec.args>-agentlib:jdwp=transport=dt_socket,server=n,address=${jpda.address} -classpath %classpath ${packageClassName} --convert-office-files --host sslin.df.eu --username print@upstart-it.de --password printer321 --printer Virtual_PDF_Printer --output-folder /tmp -i</exec.args>
+                <exec.args>-agentlib:jdwp=transport=dt_socket,server=n,address=${jpda.address} -classpath %classpath ${packageClassName} --convert-office-files --host sslin.df.eu --username print@upstart-it.de --password printer321 --output-folder /tmp -i</exec.args>
                 <exec.executable>java</exec.executable>
                 <jpda.listen>true</jpda.listen>
             </properties>
